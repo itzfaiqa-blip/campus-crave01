@@ -258,11 +258,13 @@ export default function CampusCraveApp() {
             {currentUser.role === 'rider' && <Truck size={24} />}
             {currentUser.role === 'admin' && <BarChart3 size={24} />}
           </div>
-          <div className="flex items-center gap-2">
-            {/* LOGO INSERTED HERE */}
-            <img src="logo.jpg" alt="Logo" className="w-8 h-8 rounded-full object-cover border border-gray-200" />
-            <div>
+          <div className="flex items-center gap-4">
+            {/* LOGO SIZE ADJUSTED (w-12 h-12 to match text block height) */}
+            <img src="logo.jpg" alt="Logo" className="w-12 h-12 rounded-full object-cover border border-gray-200" />
+            <div className="flex flex-col justify-center">
+              {/* REVERTED TO ORIGINAL TEXT SIZE (text-xl) */}
               <h1 className="text-xl font-bold text-gray-800 leading-none hidden sm:block">Campus Crave</h1>
+              {/* REVERTED TO ORIGINAL SUBTITLE SIZE (text-xs) */}
               <span className={`text-xs font-medium uppercase tracking-wider ${currentUser.role === 'admin' ? 'text-purple-600' : currentUser.role === 'kitchen' ? 'text-green-600' : currentUser.role === 'rider' ? 'text-blue-600' : 'text-[#ea580c]'}`}>
                 {currentUser.role} Portal
               </span>
