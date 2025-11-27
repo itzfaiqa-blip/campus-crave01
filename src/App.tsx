@@ -1,5 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { User, ShoppingBag, Truck, ChefHat, LogOut, MapPin, Clock, DollarSign, Plus, Minus, CheckCircle, BarChart3, Users, Package, Sparkles, Bot, Loader2, Navigation, ArrowRight, Phone, Calendar, RefreshCw, AlertCircle, Trash2, Edit2, Save, X, LayoutDashboard, Utensils } from 'lucide-react';
+import { 
+  User, ShoppingBag, Truck, ChefHat, LogOut, MapPin, Clock, DollarSign, 
+  Plus, Minus, CheckCircle, BarChart3, Users, Package, Sparkles, Bot, 
+  Loader2, Navigation, ArrowRight, Phone, Calendar, RefreshCw, AlertCircle, 
+  Trash2, Edit2, Save, X, LayoutDashboard, Utensils 
+} from 'lucide-react';
 
 // --- MOCK DATA & CONFIG ---
 const INITIAL_USERS = [
@@ -30,15 +35,54 @@ const INITIAL_MENU_ITEMS = [
   { id: 305, name: "Brownie", price: 120, category: "Sips & Snacks", image: "🍩" },
 ];
 
+const INITIAL_ORDERS = [
+    { id: 'ORD-173', studentId: 4, studentName: "Student Sarah", studentPhone: "0300-1234567", items: [{...INITIAL_MENU_ITEMS[0], qty: 1}], total: 350, status: 'OUT', location: "Library Main Gate", date: 'today', time: '19:48' },
+    { id: 'ORD-172', studentId: 4, studentName: "Student Sarah", studentPhone: "0300-1234567", items: [{...INITIAL_MENU_ITEMS[7], qty: 2}], total: 160, status: 'OUT', location: "CS Dept Block B", date: 'today', time: '19:29' },
+    { id: 'ORD-174', studentId: 4, studentName: "Student Ali", studentPhone: "0300-7654321", items: [{...INITIAL_MENU_ITEMS[2], qty: 1}], total: 400, status: 'OUT', location: "Boys Hostel 2", date: 'today', time: '18:15' },
+    { id: 'ORD-171', studentId: 4, studentName: "Student Sarah", studentPhone: "0300-1234567", items: [{...INITIAL_MENU_ITEMS[3], qty: 1}], total: 450, status: 'READY', location: "Girls Hostel 1", date: 'today', time: '15:31' },
+    { id: 'ORD-170', studentId: 4, studentName: "Student Sarah", studentPhone: "0300-1234567", items: [{...INITIAL_MENU_ITEMS[1], qty: 1}], total: 320, status: 'DELIVERED', location: "Admin Block", date: 'yesterday', time: '13:40' }
+];
+
+// --- LOGIC: DISTANCE MAP FOR ROUTE OPTIMIZATION ---
+// Lower number = Closer to Cafeteria
+const LOCATION_SEQUENCE = {
+  "Main Cafeteria": 0,
+  "Admin Block": 2,       // Close
+  "CS Dept Block B": 5,   // Medium
+  "Girls Hostel 1": 8,    // Far
+  "Boys Hostel 2": 10,    // Farther
+  "Library Main Gate": 15 // Furthest
+};
+
 // --- SIMULATED AI ENGINE ---
 const simulateAIResponse = async (prompt, locations = []) => {
   return new Promise((resolve) => {
     setTimeout(() => {
-      // 1. RIDER ROUTE OPTIMIZATION (Dynamic Logic)
+      // 1. RIDER ROUTE OPTIMIZATION (REAL LOGIC ADDED)
       if (prompt.includes("Sort these campus locations")) {
         if (locations.length > 0) {
-          const uniqueLocs = [...new Set(locations)]; 
-          resolve("Cafeteria -> " + uniqueLocs.join(" -> "));
+          // Count orders per location for Grouping
+          const locationCounts = locations.reduce((acc, loc) => {
+            acc[loc] = (acc[loc] || 0) + 1;
+            return acc;
+          }, {});
+
+          const uniqueLocs = Object.keys(locationCounts);
+          
+          // Sort based on defined distance sequence
+          uniqueLocs.sort((a, b) => {
+            const distA = LOCATION_SEQUENCE[a] || 99; // Default to far if unknown
+            const distB = LOCATION_SEQUENCE[b] || 99;
+            return distA - distB;
+          });
+
+          // Format with Order Grouping
+          const path = uniqueLocs.map(loc => {
+             const count = locationCounts[loc];
+             return count > 1 ? `${loc} (${count} Orders)` : loc;
+          });
+
+          resolve("Cafeteria -> " + path.join(" -> "));
         } else {
           resolve("Cafeteria -> Admin Block -> Library -> Hostels"); 
         }
@@ -46,10 +90,10 @@ const simulateAIResponse = async (prompt, locations = []) => {
       // 2. CRAVEBOT RECOMMENDATION
       else {
         const recommendations = [
-          "I'd recommend the **Zinger Burger**! It's crispy, filling, and perfect for a quick lunch. 🍔",
-          "How about **Chicken Biryani**? It's our bestseller and super spicy! 🥘",
-          "You should try the **Club Sandwich**. It's light but keeps you full during classes. 🥪",
-          "Go for **Masala Fries** and **Chai**! The ultimate campus comfort food combo. ☕🍟"
+          "I'd recommend the *Zinger Burger*! It's crispy, filling, and perfect for a quick lunch. 🍔",
+          "How about *Chicken Biryani*? It's our bestseller and super spicy! 🥘",
+          "You should try the *Club Sandwich*. It's light but keeps you full during classes. 🥪",
+          "Go for *Masala Fries* and *Chai*! The ultimate campus comfort food combo. ☕🍟"
         ];
         resolve(recommendations[Math.floor(Math.random() * recommendations.length)]);
       }
@@ -60,46 +104,95 @@ const simulateAIResponse = async (prompt, locations = []) => {
 // --- MAIN COMPONENT ---
 export default function CampusCraveApp() {
   const [users, setUsers] = useState(INITIAL_USERS);
-  const [menu, setMenu] = useState(INITIAL_MENU_ITEMS);
+  
+  // --- SYNCED STATE (LocalStorage) ---
+  const [menu, setMenu] = useState(() => {
+    const saved = localStorage.getItem('cc_menu');
+    return saved ? JSON.parse(saved) : INITIAL_MENU_ITEMS;
+  });
+
+  const [orders, setOrders] = useState(() => {
+    const saved = localStorage.getItem('cc_orders');
+    return saved ? JSON.parse(saved) : INITIAL_ORDERS;
+  });
+
+  const [weeklyRevenue, setWeeklyRevenue] = useState(() => {
+    const saved = localStorage.getItem('cc_revenue');
+    return saved ? JSON.parse(saved) : 320;
+  });
+
   const [currentUser, setCurrentUser] = useState(null);
   const [activeTab, setActiveTab] = useState('student'); 
   const [loginError, setLoginError] = useState(""); 
-  
-  // MOCK DATA: 3 Accepted Orders to demonstrate Route Optimization immediately
-  const [orders, setOrders] = useState([
-    { id: 'ORD-173', studentId: 4, studentName: "Student Sarah", studentPhone: "0300-1234567", items: [{...INITIAL_MENU_ITEMS[0], qty: 1}], total: 350, status: 'OUT', location: "Library Main Gate", date: 'today', time: '19:48' },
-    { id: 'ORD-172', studentId: 4, studentName: "Student Sarah", studentPhone: "0300-1234567", items: [{...INITIAL_MENU_ITEMS[7], qty: 2}], total: 160, status: 'OUT', location: "CS Dept Block B", date: 'today', time: '19:29' },
-    { id: 'ORD-174', studentId: 4, studentName: "Student Ali", studentPhone: "0300-7654321", items: [{...INITIAL_MENU_ITEMS[2], qty: 1}], total: 400, status: 'OUT', location: "Boys Hostel 2", date: 'today', time: '18:15' },
-    { id: 'ORD-171', studentId: 4, studentName: "Student Sarah", studentPhone: "0300-1234567", items: [{...INITIAL_MENU_ITEMS[3], qty: 1}], total: 450, status: 'READY', location: "Girls Hostel 1", date: 'today', time: '15:31' },
-    { id: 'ORD-170', studentId: 4, studentName: "Student Sarah", studentPhone: "0300-1234567", items: [{...INITIAL_MENU_ITEMS[1], qty: 1}], total: 320, status: 'DELIVERED', location: "Admin Block", date: 'yesterday', time: '13:40' }
-  ]);
-
   const [cart, setCart] = useState([]);
-  const [weeklyRevenue, setWeeklyRevenue] = useState(320); 
+
+  // --- EFFECT: SYNC DATA ACROSS TABS ---
+  useEffect(() => { localStorage.setItem('cc_menu', JSON.stringify(menu)); }, [menu]);
+  useEffect(() => { localStorage.setItem('cc_orders', JSON.stringify(orders)); }, [orders]);
+  useEffect(() => { localStorage.setItem('cc_revenue', JSON.stringify(weeklyRevenue)); }, [weeklyRevenue]);
+
+  // Tab Listener
+  useEffect(() => {
+    const handleStorageChange = (e) => {
+        if (e.key === 'cc_orders') setOrders(JSON.parse(e.newValue));
+        if (e.key === 'cc_menu') setMenu(JSON.parse(e.newValue));
+        if (e.key === 'cc_revenue') setWeeklyRevenue(JSON.parse(e.newValue));
+    };
+    window.addEventListener('storage', handleStorageChange);
+    return () => window.removeEventListener('storage', handleStorageChange);
+  }, []);
+
+  // --- EFFECT: CHECK URL FOR AUTO-LOGIN IN NEW TAB ---
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const roleParam = params.get('role');
+    const emailParam = params.get('email');
+    
+    if (roleParam && emailParam) {
+      const user = users.find(u => u.email === emailParam);
+      if (user) {
+          setCurrentUser(user);
+          window.history.replaceState({}, document.title, window.location.pathname);
+      }
+    }
+  }, [users]);
 
   const handleLogin = (email, password) => {
     setLoginError("");
     const user = users.find(u => u.email === email);
-    if (!user) { setLoginError("⚠️ Account not found. Please check your email."); return; }
-    if (user.password !== password) { setLoginError("⚠️ Incorrect password. Please try again."); return; }
-    if (user.role !== activeTab) { setLoginError(`⚠️ Access Denied. This account is for ${user.role.toUpperCase()}.`); return; }
-    setCurrentUser(user);
+    if (!user) { setLoginError("⚠ Account not found. Please check your email."); return; }
+    if (user.password !== password) { setLoginError("⚠ Incorrect password. Please try again."); return; }
+    if (user.role !== activeTab) { setLoginError(`⚠ Access Denied. This account is for ${user.role.toUpperCase()}.`); return; }
+    
+    const currentUrl = new URL(window.location.href);
+    currentUrl.searchParams.set('role', user.role);
+    currentUrl.searchParams.set('email', user.email);
+    
+    window.open(currentUrl.toString(), '_blank');
   };
 
   const handleSignup = (name, email, password, phone) => {
     const newUser = { id: users.length + 1, name, email, password, role: 'student', phone };
     setUsers([...users, newUser]);
-    setCurrentUser(newUser);
+    const currentUrl = new URL(window.location.href);
+    currentUrl.searchParams.set('role', 'student');
+    currentUrl.searchParams.set('email', email);
+    window.open(currentUrl.toString(), '_blank');
   };
 
-  const logout = () => { setCurrentUser(null); setCart([]); setLoginError(""); };
+  const logout = () => { 
+      setCurrentUser(null); 
+      setCart([]); 
+      setLoginError(""); 
+      window.location.href = window.location.pathname;
+  };
 
   // --- LOGIN SCREEN (FULL SCREEN SPLIT DESIGN) ---
   if (!currentUser) {
     return (
       <div className="flex h-screen w-full bg-white font-sans overflow-hidden">
         
-        {/* Left Half - Orange Branding (Matches Sign In Button Color) */}
+        {/* Left Half - Orange Branding */}
         <div className="hidden lg:flex w-1/2 bg-gradient-to-br from-[#ea580c] to-[#c2410c] relative flex-col justify-between p-16 text-white">
           <div className="relative z-10 mt-10">
             <h1 className="text-7xl font-extrabold mb-4 tracking-tight drop-shadow-sm">Campus Crave</h1>
@@ -127,11 +220,10 @@ export default function CampusCraveApp() {
           <div className="absolute bottom-0 left-0 w-96 h-96 bg-yellow-500 opacity-10 rounded-full -ml-20 -mb-20 blur-3xl"></div>
         </div>
 
-        {/* Right Half - Login Form (Centered & White Background) */}
-        <div className="w-full lg:w-1/2 flex items-center justify-center p-8 bg-white h-full">
+        {/* Right Half - Login Form */}
+        <div className="w-full lg:w-1/2 flex items-center justify-center p-8 bg-white h-full overflow-y-auto">
           <div className="w-full max-w-md">
             <div className="mb-10 text-center">
-              {/* User Icon with Orange bg */}
               <div className="inline-flex items-center justify-center p-4 rounded-full bg-orange-50 text-[#ea580c] mb-6 shadow-sm border border-orange-100">
                 <User size={40} />
               </div>
@@ -160,17 +252,21 @@ export default function CampusCraveApp() {
     <div className="min-h-screen w-full bg-gray-50 font-sans">
       <nav className="bg-white border-b sticky top-0 z-50 px-4 lg:px-8 py-4 flex justify-between items-center shadow-sm">
         <div className="flex items-center gap-3">
-          <div className={`p-2 rounded-xl text-white bg-[#ea580c] shadow-md shadow-orange-200`}>
+          <div className="p-2 rounded-xl text-white bg-[#ea580c] shadow-md shadow-orange-200">
             {currentUser.role === 'student' && <User size={24} />}
             {currentUser.role === 'kitchen' && <ChefHat size={24} />}
             {currentUser.role === 'rider' && <Truck size={24} />}
             {currentUser.role === 'admin' && <BarChart3 size={24} />}
           </div>
-          <div>
-            <h1 className="text-xl font-bold text-gray-800 leading-none hidden sm:block">Campus Crave</h1>
-            <span className={`text-xs font-medium uppercase tracking-wider ${currentUser.role === 'admin' ? 'text-purple-600' : currentUser.role === 'kitchen' ? 'text-green-600' : currentUser.role === 'rider' ? 'text-blue-600' : 'text-[#ea580c]'}`}>
-              {currentUser.role} Portal
-            </span>
+          <div className="flex items-center gap-2">
+            {/* LOGO INSERTED HERE */}
+            <img src="logo.jpg" alt="Logo" className="w-8 h-8 rounded-full object-cover border border-gray-200" />
+            <div>
+              <h1 className="text-xl font-bold text-gray-800 leading-none hidden sm:block">Campus Crave</h1>
+              <span className={`text-xs font-medium uppercase tracking-wider ${currentUser.role === 'admin' ? 'text-purple-600' : currentUser.role === 'kitchen' ? 'text-green-600' : currentUser.role === 'rider' ? 'text-blue-600' : 'text-[#ea580c]'}`}>
+                {currentUser.role} Portal
+              </span>
+            </div>
           </div>
         </div>
         <div className="flex items-center gap-4 sm:gap-6">
@@ -185,7 +281,10 @@ export default function CampusCraveApp() {
       <main className="p-4 lg:p-8 w-full max-w-[1920px] mx-auto">
         {currentUser.role === 'student' && (
           <StudentDashboard user={currentUser} menu={menu} cart={cart} setCart={setCart} 
-            placeOrder={(order) => { setOrders([order, ...orders]); }} 
+            placeOrder={(order) => { 
+                const newOrders = [order, ...orders];
+                setOrders(newOrders);
+            }} 
             myOrders={orders.filter(o => o.studentId === currentUser.id)} 
           />
         )}
@@ -233,7 +332,7 @@ function LoginForm({ role, onLogin, onSignup, error }) {
         {isSignup ? 'Create Account' : 'Sign In'}
       </button>
       {role === 'student' && <div className="text-center pt-2"><button type="button" onClick={() => setIsSignup(!isSignup)} className="text-sm text-[#ea580c] hover:text-[#c2410c] font-medium">{isSignup ? 'Already have an account? Sign In' : "Don't have an account? Sign Up"}</button></div>}
-      {role !== 'student' && <div className="bg-blue-50 text-blue-800 p-3 rounded-md text-xs flex gap-2 leading-relaxed mt-4 border border-blue-100"><span>ℹ️</span> Staff accounts are provisioned by the Administration. Contact IT if you lost credentials.</div>}
+      {role !== 'student' && <div className="bg-blue-50 text-blue-800 p-3 rounded-md text-xs flex gap-2 leading-relaxed mt-4 border border-blue-100"><span>ℹ</span> Staff accounts are provisioned by the Administration. Contact IT if you lost credentials.</div>}
     </form>
   );
 }
@@ -381,11 +480,11 @@ function RiderDashboard({ orders, updateStatus }) {
 
   // FIXED: Pass actual locations to AI + 2 Order Restriction
   const optimizeRoute = async () => {
-    if(myJobs.length < 2) return alert("⚠️ Please accept at least 2 jobs to optimize route! Currently accepted: " + myJobs.length);
+    if(myJobs.length < 2) return alert("⚠ Please accept at least 2 jobs to optimize route! Currently accepted: " + myJobs.length);
     
     setLoading(true);
     const currentLocations = myJobs.map(job => job.location); // Get ALL accepted job locations
-    const text = await simulateAIResponse(`Sort these campus locations`, currentLocations); // Pass to AI
+    const text = await simulateAIResponse("Sort these campus locations", currentLocations); // Pass to AI
     setRoute(text);
     setLoading(false);
   };
