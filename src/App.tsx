@@ -103,9 +103,13 @@ const simulateAIResponse = async (prompt, locations = []) => {
 
 // --- MAIN COMPONENT ---
 export default function CampusCraveApp() {
-  const [users, setUsers] = useState(INITIAL_USERS);
-  
   // --- SYNCED STATE (LocalStorage) ---
+  // FIXED: Users are now loaded from local storage to persist signups
+  const [users, setUsers] = useState(() => {
+    const saved = localStorage.getItem('cc_users');
+    return saved ? JSON.parse(saved) : INITIAL_USERS;
+  });
+  
   const [menu, setMenu] = useState(() => {
     const saved = localStorage.getItem('cc_menu');
     return saved ? JSON.parse(saved) : INITIAL_MENU_ITEMS;
@@ -130,6 +134,8 @@ export default function CampusCraveApp() {
   useEffect(() => { localStorage.setItem('cc_menu', JSON.stringify(menu)); }, [menu]);
   useEffect(() => { localStorage.setItem('cc_orders', JSON.stringify(orders)); }, [orders]);
   useEffect(() => { localStorage.setItem('cc_revenue', JSON.stringify(weeklyRevenue)); }, [weeklyRevenue]);
+  // FIXED: Added persistence for Users
+  useEffect(() => { localStorage.setItem('cc_users', JSON.stringify(users)); }, [users]);
 
   // Tab Listener
   useEffect(() => {
@@ -137,6 +143,7 @@ export default function CampusCraveApp() {
         if (e.key === 'cc_orders') setOrders(JSON.parse(e.newValue));
         if (e.key === 'cc_menu') setMenu(JSON.parse(e.newValue));
         if (e.key === 'cc_revenue') setWeeklyRevenue(JSON.parse(e.newValue));
+        if (e.key === 'cc_users') setUsers(JSON.parse(e.newValue)); // FIXED: Listen for user changes
     };
     window.addEventListener('storage', handleStorageChange);
     return () => window.removeEventListener('storage', handleStorageChange);
